@@ -31,6 +31,7 @@ import com.posthog.android.PostHogAndroidConfig
 import com.posthog.android.internal.getApplicationInfo
 import com.posthog.android.replay.PostHogInternalReplayApi
 import com.posthog.android.replay.PostHogReplayIntegration
+import com.posthog.internal.PostHogSessionManager
 import com.posthog.logs.PostHogLogSeverity
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -46,6 +47,10 @@ import kotlin.math.roundToInt
 
 private const val FLUTTER_VIEW_CLASS_PREFIX = "io.flutter"
 private const val OCCLUSION_TICK_MS = 1000L
+
+// Ticks a not-occluded read must repeat before it ends an episode. Both the
+// active and the inactive path debounce, and they have to agree.
+private const val END_DEBOUNCE_TICKS = 1
 
 private const val BRIDGE_FAILURE_STRIKE_LIMIT = 3
 
@@ -408,6 +413,10 @@ class PosthogFlutterPlugin :
                 result.success(isSessionReplayActive())
             }
 
+            "getSessionReplayState" -> {
+                result.success(getSessionReplayState())
+            }
+
             "startSessionRecording" -> {
                 startSessionRecording(call, result)
             }
@@ -435,6 +444,15 @@ class PosthogFlutterPlugin :
     }
 
     private fun isSessionReplayActive(): Boolean = PostHog.isSessionReplayActive()
+
+    // peekSessionId(), not getSessionId(): the expiring accessor would rotate the
+    // session from this read, moving where the idle and maximum-duration bounds
+    // are applied. The send still resolves an expiring id, as it always has.
+    private fun getSessionReplayState(): Map<String, Any?> =
+        mapOf(
+            "isActive" to isSessionReplayActive(),
+            "sessionId" to PostHogSessionManager.peekSessionId()?.toString(),
+        )
 
     private fun startSessionRecording(
         call: MethodCall,
@@ -632,6 +650,9 @@ class PosthogFlutterPlugin :
                 posthogConfig.getIfNotNull<Map<String, Any>>("errorTrackingConfig") { errorConfig ->
                     errorConfig.getIfNotNull<Boolean>("captureNativeExceptions") {
                         errorTrackingConfig.autoCapture = it
+                    }
+                    errorConfig.getIfNotNull<Boolean>("captureNativeCrashes") {
+                        errorTrackingConfig.captureNativeCrashes = it
                     }
                     errorConfig.getIfNotNull<List<String>>("inAppIncludes") { includes ->
                         errorTrackingConfig.inAppIncludes.addAll(includes)
@@ -857,6 +878,9 @@ class PosthogFlutterPlugin :
     // End-transition debounce: ticks reading not-occluded while an episode is active.
     private var notOccludedTicks = 0
 
+    // Whether the episode is being held open across a run of inactive reads.
+    private var heldWhileInactive = false
+
     // Monotonic episode id, stamped into every push so Dart drops stale-episode
     // async work. Volatile: re-read on the capture executor.
     @Volatile
@@ -930,6 +954,8 @@ class PosthogFlutterPlugin :
 
     private fun stopOcclusionDetector() {
         occlusionDetectorRunning = false
+        heldWhileInactive = false
+        notOccludedTicks = 0
         mainHandler.removeCallbacks(occlusionTicker)
         mainHandler.removeCallbacks(nudgeRunnable)
         unregisterLifecycleTracking()
@@ -964,10 +990,34 @@ class PosthogFlutterPlugin :
         )
     }
 
+    // Null activity (config-change detach) fails open — the captured Flutter tree
+    // has no native pixels. Known limitation: a host recreation mid-episode never
+    // re-fires onActivityResumed, ending the episode early.
+    private fun isFlutterOccluded(): Boolean = activity != null && isHostActivityStopped && otherResumedCount > 0
+
     @OptIn(PostHogInternalReplayApi::class)
     private fun occlusionTick() {
         if (!isSessionReplayActive()) {
             if (isOccluded || bridgeEnabled) {
+                // Replay reads inactive across a session boundary — reset(), or a
+                // close()/setup() pair — until its flags reload lands, and that is
+                // not the episode ending. Ending here would lift Dart's capture
+                // suppression under a live native cover. Unbounded on purpose:
+                // nothing is captured while replay is off, so the hold costs no
+                // frames, and the cover going away ends the episode either way.
+                if (isFlutterOccluded()) {
+                    heldWhileInactive = true
+                    // A blip seen before the hold is deliberately not carried
+                    // across it, so it cannot signal a cover swap later.
+                    notOccludedTicks = 0
+                    return
+                } else if (notOccludedTicks < END_DEBOUNCE_TICKS) {
+                    // The same end-debounce the active path applies, because a
+                    // native→native handoff's first not-occluded read can land on
+                    // either side of the boundary.
+                    notOccludedTicks++
+                    return
+                }
                 isOccluded = false
                 bridgeEnabled = false
                 bridgeEpisodeStarted = false
@@ -977,24 +1027,31 @@ class PosthogFlutterPlugin :
                 // occluded=true push looks like unchanged state.
                 pushOcclusionEvent(occluded = false)
             }
+            heldWhileInactive = false
             return
         }
-        // Null activity (config-change detach) fails open — the captured Flutter
-        // tree has no native pixels. Known limitation: a host recreation
-        // mid-episode never re-fires onActivityResumed, ending the episode early.
-        val occludedNow =
-            activity != null && isHostActivityStopped && otherResumedCount > 0
+        val resumedFromHold = heldWhileInactive
+        heldWhileInactive = false
+        val occludedNow = isFlutterOccluded()
         // Debounce END only: a native→native handoff (A pauses before B resumes)
         // briefly reads not-occluded; ending the episode there would flash a
         // stale Flutter frame into the native flow.
-        if (!occludedNow && isOccluded && notOccludedTicks < 1) {
+        if (!occludedNow && isOccluded && notOccludedTicks < END_DEBOUNCE_TICKS) {
             notOccludedTicks++
             return
         }
         // Occluded again after a blip = the cover was swapped. The old cover's
         // bridge grant must not carry over; re-handshake under a new episode
         // id. No end event, so Dart's suppression never lapses.
-        val coverSwapped = occludedNow && isOccluded && notOccludedTicks > 0
+        //
+        // A hold that ends with the cover still up and no bridge re-handshakes
+        // for the same reason: the enable was refused while replay was off (it
+        // requires an active recording), so without this Dart keeps showing a
+        // placeholder it emitted for an episode the SDK has since stopped
+        // recording, and nothing replaces it until the cover goes away.
+        val resumedUnbridged = resumedFromHold && !bridgeEnabled
+        val coverSwapped =
+            occludedNow && isOccluded && (notOccludedTicks > 0 || resumedUnbridged)
         notOccludedTicks = 0
         if (occludedNow != isOccluded) {
             val previousOccluded = isOccluded
