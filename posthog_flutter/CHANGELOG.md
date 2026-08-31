@@ -1,5 +1,39 @@
 ## Next
 
+## 5.39.0
+
+### Minor Changes
+
+- d7c51c2: Surveys can now display an optional intro screen before the first question, configured via the new `displayIntroScreen`, `introScreenHeader`, `introScreenDescription`, `introScreenDescriptionContentType`, and `introScreenButtonText` appearance fields. The intro is rendered by the Dart survey UI as the leading mirror of the confirmation message: advancing past it records no response and sends no survey event, while closing the survey from the intro still sends the normal `survey dismissed` event. Requires posthog-ios >= 3.70.0 and posthog-android >= 3.59.0, which forward the new appearance fields over the bridge.
+
+## 5.38.1
+
+### Patch Changes
+
+- e7445f4: Fix session replay painting a clipped map, WebView, or camera preview past its visible edge and over the widgets around it. A platform view's mask now covers only the part an ancestor clip leaves visible, and a revealed one is clipped to the same region, so widgets a platform view used to bury are visible in replays again
+
+## 5.38.0
+
+### Minor Changes
+
+- 0de477b: Add `PostHogSessionReplayConfig.verifyScreenshotMaskAlignment` for Android native screens captured with `captureNativeScreens`. Enabling it can preserve screenshots and mask alignment during pixel-only redraws, including continuously animated content, but performs additional view hierarchy walks. It remains disabled by default.
+
+## 5.37.1
+
+### Patch Changes
+
+- 577c59e: Fix session replay started with `startSessionRecording()` capturing nothing on Android by requiring posthog-android 3.60.7 or newer.
+
+## 5.37.0
+
+### Minor Changes
+
+- 024d690: Add `errorTrackingConfig.captureNativeCrashes` to capture native C/C++ (NDK) crashes on Android. Requires Android 12 (API 31) and exception autocapture enabled in the project's error tracking settings; crashes are captured on the next app launch and symbolicated against `.so` debug symbols uploaded with the PostHog Gradle plugin.
+
+### Patch Changes
+
+- f21daf7: Fix session replay recording the Flutter UI from underneath a native screen when the session changes — `reset()`, or a `close()`/`setup()` pair — while that screen is up.
+
 ## 5.36.6
 
 ### Patch Changes
