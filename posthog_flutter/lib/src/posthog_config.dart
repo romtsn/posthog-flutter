@@ -242,15 +242,21 @@ class PostHogConfig {
   /// Whether to automatically capture `$push_notification_opened` when a user
   /// taps a PostHog-delivered notification.
   ///
-  /// Coverage differs per platform. iOS hooks the notification-response
-  /// delegate, so every tap on a **remote** notification is captured whatever
-  /// the app state; locally-scheduled notifications are ignored. Android only
-  /// reads the launch intent, so it sees cold starts alone. Call
-  /// [Posthog.capturePushNotificationOpened] for the opens this misses —
-  /// local notifications on either platform, plus foreground messages and
-  /// warm-start taps on Android.
+  /// Every tap on a **remote** notification is captured on both platforms,
+  /// whether it cold-launched the app or the app was already running.
+  /// Locally-scheduled notifications are ignored. On Android a tap is
+  /// recognised by the `google.message_id` extra Firebase puts on the intent,
+  /// so push delivered outside FCM is not seen. Call
+  /// [Posthog.capturePushNotificationOpened] for the opens this misses.
   ///
   /// **Flutter web:** not supported. Defaults to `true`.
+  ///
+  /// On iOS this requires your app to set `UNUserNotificationCenter.current().delegate`.
+  /// Without one, iOS reports the tap to nobody and no open can be captured.
+  ///
+  /// Setting this to `false` does not prevent the iOS cold-start prewarm, which runs before
+  /// Dart does — opt that out with the `com.posthog.posthog.CAPTURE_PUSH_NOTIFICATION_OPENED`
+  /// key in `Info.plist`.
   bool capturePushNotificationOpened = true;
 
   /// Mints a signed identity-verification token for push subscription requests.
@@ -675,6 +681,15 @@ class PostHogSessionReplayConfig {
   /// Creates a session replay configuration with default masking enabled.
   PostHogSessionReplayConfig();
 
+  /// Capture touch coordinates in session replay on Android and iOS.
+  ///
+  /// Masking screenshots does not hide touches on a known keypad layout.
+  /// Set this before [Posthog.setup]. Runtime changes are not supported.
+  /// Disabling touches does not stop screenshot capture.
+  ///
+  /// Default: true. Not supported on web or desktop.
+  var captureTouches = true;
+
   /// Enable masking of all text and text input fields.
   /// Default: true.
   ///
@@ -790,6 +805,7 @@ class PostHogSessionReplayConfig {
   /// implementations.
   Map<String, dynamic> toMap() {
     return {
+      'captureTouches': captureTouches,
       'maskAllImages': maskAllImages,
       'maskAllTexts': maskAllTexts,
       'throttleDelayMs': throttleDelay.inMilliseconds,
