@@ -2678,6 +2678,17 @@
                         "entryPoints": [],
                         "isDeprecated": false,
                         "isExperimental": false,
+                        "isReadable": true,
+                        "isStatic": false,
+                        "isWriteable": true,
+                        "name": "maskCustomPaint",
+                        "relativePath": "lib/src/posthog_config.dart",
+                        "typeName": "bool"
+                    },
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": false,
+                        "isExperimental": false,
                         "isReadable": false,
                         "isStatic": false,
                         "isWriteable": true,
@@ -2706,6 +2717,39 @@
                         "name": "sampleRate",
                         "relativePath": "lib/src/posthog_config.dart",
                         "typeName": "double?"
+                    },
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": false,
+                        "isExperimental": true,
+                        "isReadable": true,
+                        "isStatic": false,
+                        "isWriteable": true,
+                        "name": "screenshotScale",
+                        "relativePath": "lib/src/posthog_config.dart",
+                        "typeName": "double"
+                    },
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": false,
+                        "isExperimental": true,
+                        "isReadable": true,
+                        "isStatic": false,
+                        "isWriteable": true,
+                        "name": "screenshotCompressionQuality",
+                        "relativePath": "lib/src/posthog_config.dart",
+                        "typeName": "int"
+                    },
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": false,
+                        "isExperimental": true,
+                        "isReadable": true,
+                        "isStatic": false,
+                        "isWriteable": true,
+                        "name": "screenshotColorMode",
+                        "relativePath": "lib/src/posthog_config.dart",
+                        "typeName": "PostHogScreenshotColorMode"
                     },
                     {
                         "entryPoints": [],
@@ -2748,6 +2792,58 @@
                 "name": "PostHogSessionReplayConfig",
                 "relativePath": "lib/src/posthog_config.dart",
                 "superTypeNames": [
+                    "Object"
+                ],
+                "typeParameterNames": []
+            },
+            {
+                "entryPoints": [
+                    "posthog_flutter.dart"
+                ],
+                "executableDeclarations": [],
+                "fieldDeclarations": [
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": false,
+                        "isExperimental": false,
+                        "isReadable": true,
+                        "isStatic": true,
+                        "isWriteable": false,
+                        "name": "argb8888",
+                        "relativePath": "lib/src/posthog_config.dart",
+                        "typeName": "PostHogScreenshotColorMode"
+                    },
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": false,
+                        "isExperimental": false,
+                        "isReadable": true,
+                        "isStatic": true,
+                        "isWriteable": false,
+                        "name": "rgb565",
+                        "relativePath": "lib/src/posthog_config.dart",
+                        "typeName": "PostHogScreenshotColorMode"
+                    },
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": false,
+                        "isExperimental": false,
+                        "isReadable": true,
+                        "isStatic": true,
+                        "isWriteable": false,
+                        "name": "values",
+                        "relativePath": "lib/src/posthog_config.dart",
+                        "typeName": "List<PostHogScreenshotColorMode>"
+                    }
+                ],
+                "isDeprecated": false,
+                "isExperimental": true,
+                "isRequired": false,
+                "isSealed": false,
+                "name": "PostHogScreenshotColorMode",
+                "relativePath": "lib/src/posthog_config.dart",
+                "superTypeNames": [
+                    "Enum",
                     "Object"
                 ],
                 "typeParameterNames": []
@@ -5272,6 +5368,71 @@
                 "relativePath": "lib/src/replay/mask/posthog_mask_widget.dart",
                 "superTypeNames": [
                     "State<PostHogMaskWidget>",
+                    "Object",
+                    "Diagnosticable"
+                ],
+                "typeParameterNames": []
+            },
+            {
+                "entryPoints": [
+                    "posthog_flutter.dart"
+                ],
+                "executableDeclarations": [
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": false,
+                        "isExperimental": false,
+                        "isStatic": false,
+                        "name": "new",
+                        "parameters": [
+                            {
+                                "isDeprecated": false,
+                                "isExperimental": false,
+                                "isNamed": true,
+                                "isRequired": false,
+                                "name": "key",
+                                "relativePath": "lib/src/replay/mask/posthog_unmask_widget.dart",
+                                "typeName": "Key?"
+                            },
+                            {
+                                "isDeprecated": false,
+                                "isExperimental": false,
+                                "isNamed": true,
+                                "isRequired": true,
+                                "name": "child",
+                                "relativePath": "lib/src/replay/mask/posthog_unmask_widget.dart",
+                                "typeName": "Widget"
+                            }
+                        ],
+                        "relativePath": "lib/src/replay/mask/posthog_unmask_widget.dart",
+                        "returnTypeName": "PostHogUnmaskWidget",
+                        "type": "constructor",
+                        "typeParameterNames": []
+                    }
+                ],
+                "fieldDeclarations": [
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": false,
+                        "isExperimental": false,
+                        "isReadable": true,
+                        "isStatic": false,
+                        "isWriteable": false,
+                        "name": "child",
+                        "relativePath": "lib/src/replay/mask/posthog_unmask_widget.dart",
+                        "typeName": "Widget"
+                    }
+                ],
+                "isDeprecated": false,
+                "isExperimental": false,
+                "isRequired": false,
+                "isSealed": false,
+                "name": "PostHogUnmaskWidget",
+                "relativePath": "lib/src/replay/mask/posthog_unmask_widget.dart",
+                "superTypeNames": [
+                    "StatefulWidget",
+                    "Widget",
+                    "DiagnosticableTree",
                     "Object",
                     "Diagnosticable"
                 ],

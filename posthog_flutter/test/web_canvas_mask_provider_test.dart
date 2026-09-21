@@ -114,6 +114,84 @@ void main() {
     return sessionRecording as JSObject;
   }
 
+  for (final unsized in [false, true]) {
+    testWidgets('custom-paint regions fail closed for unsized=$unsized',
+        (tester) async {
+      installPosthogStub();
+      final config = PostHogConfig('phc_test');
+      config.sessionReplayConfig
+        ..maskAllTexts = false
+        ..maskAllImages = false
+        ..maskCustomPaint = true;
+      WebCanvasMaskProvider(config).register();
+
+      await tester.pumpWidget(
+        PostHogWidget(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: CustomPaint(
+              size: unsized ? Size.zero : const Size(100, 40),
+              painter: BannerPainter(
+                message: 'sensitive',
+                layoutDirection: TextDirection.ltr,
+                textDirection: TextDirection.ltr,
+                location: BannerLocation.topStart,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final flutterView = web.document.createElement('flutter-view');
+      final canvas = web.document.createElement('canvas');
+      flutterView.appendChild(canvas);
+      web.document.body!.appendChild(flutterView);
+      WebCanvasMaskProvider.debugOwnViewHostOverride = flutterView;
+      try {
+        final regionsFn = capturedSessionRecording()
+            .getProperty<JSObject>('canvasCapture'.toJS)
+            .getProperty<JSFunction>('maskRegionsFn'.toJS);
+        final result = regionsFn.callAsFunction(null, canvas);
+        if (unsized) {
+          expect(result, isNull);
+          return;
+        }
+        final regions = result as JSArray<JSObject>;
+        expect(regions.toDart, isNotEmpty);
+        expect(
+          regions.toDart.any((region) =>
+              region.getProperty<JSNumber>('width'.toJS).toDartDouble >= 100 &&
+              region.getProperty<JSNumber>('height'.toJS).toDartDouble >= 40),
+          isTrue,
+        );
+      } finally {
+        flutterView.remove();
+      }
+    });
+  }
+
+  test('warns when only custom-paint masking is requested without a provider',
+      () {
+    final captureCanvas = JSObject()
+      ..setProperty('recordCanvas'.toJS, true.toJS);
+    final sessionRecording = JSObject()
+      ..setProperty('captureCanvas'.toJS, captureCanvas);
+    installPosthogStub(
+      declaresMaskProvider: false,
+      sessionRecording: sessionRecording,
+    );
+    final warns = interceptWarns();
+    final config = PostHogConfig('phc_test');
+    config.sessionReplayConfig
+      ..maskAllTexts = false
+      ..maskAllImages = false
+      ..maskCustomPaint = true;
+
+    WebCanvasMaskProvider(config).register();
+
+    expect(warns(), 1);
+  });
+
   test('leaves posthog-js untouched when the app declares no mask provider',
       () {
     installPosthogStub(declaresMaskProvider: true, recordingStarted: true);
@@ -124,6 +202,143 @@ void main() {
     expect(capturedConfig, isNull);
     expect(stopRecordingCalls, 0);
     expect(startRecordingCalls, 0);
+  });
+
+  testWidgets('an unmask widget mounted before register opts in',
+      (tester) async {
+    installPosthogStub(declaresMaskProvider: false, recordingStarted: true);
+    await tester
+        .pumpWidget(const PostHogUnmaskWidget(child: SizedBox.shrink()));
+    expect(setConfigCalls, 0);
+    WebCanvasMaskProvider(PostHogConfig('phc_test')).register();
+    expect(setConfigCalls, 1);
+    expect(stopRecordingCalls, 1);
+    expect(startRecordingCalls, 1);
+  });
+
+  testWidgets('an unmask widget alone enables safe canvas regions',
+      (tester) async {
+    installPosthogStub(declaresMaskProvider: false, recordingStarted: true);
+    WebCanvasMaskProvider(PostHogConfig('phc_test')).register();
+    expect(capturedConfig, isNull);
+    await tester.pumpWidget(const PostHogWidget(
+        child: MaterialApp(
+      home: Scaffold(
+          body: Column(children: [
+        Text('private sibling'),
+        PostHogUnmaskWidget(
+            child: Column(children: [
+          Text('safe label'),
+          TextField(obscureText: true),
+          TextField(autofillHints: [AutofillHints.creditCardNumber]),
+        ])),
+      ])),
+    )));
+    final recording = capturedSessionRecording();
+    expect(recording.getProperty<JSAny?>('blockSelector'.toJS).dartify(),
+        'flt-semantics-host');
+    expect(setConfigCalls, 1);
+    expect(stopRecordingCalls, 1);
+    expect(startRecordingCalls, 1);
+    final flutterView = web.document.createElement('flutter-view');
+    flutterView.setAttribute('style', 'position: fixed; left: 0; top: 0');
+    final canvas = web.document.createElement('canvas');
+    canvas.setAttribute('style', 'position: absolute; left: 0; top: 0');
+    flutterView.appendChild(canvas);
+    web.document.body!.appendChild(flutterView);
+    WebCanvasMaskProvider.debugOwnViewHostOverride = flutterView;
+    try {
+      final regionsFn = recording
+          .getProperty<JSObject>('canvasCapture'.toJS)
+          .getProperty<JSFunction>('maskRegionsFn'.toJS);
+      final regions =
+          (regionsFn.callAsFunction(null, canvas) as JSArray<JSObject>)
+              .toDart
+              .map((region) => Rect.fromLTWH(
+                    region.getProperty<JSNumber>('x'.toJS).toDartDouble,
+                    region.getProperty<JSNumber>('y'.toJS).toDartDouble,
+                    region.getProperty<JSNumber>('width'.toJS).toDartDouble,
+                    region.getProperty<JSNumber>('height'.toJS).toDartDouble,
+                  ))
+              .toList();
+      expect(
+          regions.any(
+              (r) => r.contains(tester.getCenter(find.text('safe label')))),
+          isFalse);
+      expect(
+          regions.any((r) =>
+              r.contains(tester.getCenter(find.text('private sibling')))),
+          isTrue);
+      for (final field in find.byType(EditableText).evaluate()) {
+        expect(
+            regions.any((r) =>
+                r.contains(tester.getCenter(find.byWidget(field.widget)))),
+            isTrue);
+      }
+    } finally {
+      flutterView.remove();
+    }
+  });
+
+  testWidgets('unmask and mask mounts share a single registration',
+      (tester) async {
+    installPosthogStub(declaresMaskProvider: false, recordingStarted: true);
+    WebCanvasMaskProvider(PostHogConfig('phc_test')).register();
+    await tester
+        .pumpWidget(const PostHogUnmaskWidget(child: SizedBox.shrink()));
+    expect(setConfigCalls, 1);
+    await tester.pumpWidget(const PostHogMaskWidget(child: SizedBox.shrink()));
+    await tester
+        .pumpWidget(const PostHogUnmaskWidget(child: SizedBox.shrink()));
+    expect(setConfigCalls, 1);
+    expect(stopRecordingCalls, 1);
+    expect(startRecordingCalls, 1);
+  });
+
+  testWidgets('an unmask widget outside the tracked tree does not opt in',
+      (tester) async {
+    installPosthogStub(declaresMaskProvider: false, recordingStarted: true);
+    WebCanvasMaskProvider(PostHogConfig('phc_test')).register();
+    await tester.pumpWidget(Directionality(
+      textDirection: TextDirection.ltr,
+      child: Column(children: [
+        Expanded(child: PostHogWidget(child: Container())),
+        const PostHogUnmaskWidget(child: SizedBox.shrink()),
+      ]),
+    ));
+    expect(setConfigCalls, 0);
+    expect(stopRecordingCalls, 0);
+    expect(startRecordingCalls, 0);
+  });
+
+  testWidgets(
+      'unmounting an unmask widget outside the tracked tree recovers frames',
+      (tester) async {
+    installPosthogStub(recordingStarted: true);
+    WebCanvasMaskProvider(PostHogConfig('phc_test')).register();
+    Widget layout(bool outside) => Directionality(
+          textDirection: TextDirection.ltr,
+          child: Column(children: [
+            Expanded(child: PostHogWidget(child: Container())),
+            if (outside) const PostHogUnmaskWidget(child: SizedBox.shrink()),
+          ]),
+        );
+    await tester.pumpWidget(layout(true));
+    final flutterView = web.document.createElement('flutter-view');
+    final canvas = web.document.createElement('canvas');
+    flutterView.appendChild(canvas);
+    web.document.body!.appendChild(flutterView);
+    WebCanvasMaskProvider.debugOwnViewHostOverride = flutterView;
+    try {
+      final regionsFn = capturedSessionRecording()
+          .getProperty<JSObject>('canvasCapture'.toJS)
+          .getProperty<JSFunction>('maskRegionsFn'.toJS);
+      expect(regionsFn.callAsFunction(null, canvas), isNull);
+      await tester.pumpWidget(layout(false));
+      expect(regionsFn.callAsFunction(null, canvas), isNotNull);
+    } finally {
+      flutterView.remove();
+    }
   });
 
   testWidgets('opts in when a PostHogMaskWidget mounted before register()',
@@ -764,6 +979,70 @@ void main() {
     } finally {
       flutterView.remove();
       consoleObject.setProperty('warn'.toJS, originalWarn);
+    }
+  });
+
+  testWidgets(
+      'canvas unmask regions override explicit masks but keep sensitive inputs',
+      (tester) async {
+    await tester.pumpWidget(const PostHogWidget(
+      child: MaterialApp(
+          home: Scaffold(
+              body: PostHogMaskWidget(
+                  child: Column(children: [
+        Text('private sibling'),
+        PostHogUnmaskWidget(
+            child: Column(children: [
+          Text('safe label'),
+          TextField(autofillHints: [AutofillHints.creditCardNumber]),
+          TextField(autofillHints: [AutofillHints.email]),
+          PostHogMaskWidget(child: Text('nested explicit mask')),
+        ])),
+      ])))),
+    ));
+    final flutterView = web.document.createElement('flutter-view');
+    flutterView.setAttribute('style', 'position: fixed; left: 0; top: 0');
+    final canvas = web.document.createElement('canvas');
+    canvas.setAttribute('style', 'position: absolute; left: 0; top: 0');
+    flutterView.appendChild(canvas);
+    web.document.body!.appendChild(flutterView);
+    installPosthogStub();
+    try {
+      WebCanvasMaskProvider.debugOwnViewHostOverride = flutterView;
+      WebCanvasMaskProvider(PostHogConfig('phc_test')).register();
+      final regionsFn = capturedSessionRecording()
+          .getProperty<JSObject>('canvasCapture'.toJS)
+          .getProperty<JSFunction>('maskRegionsFn'.toJS);
+      final regions =
+          (regionsFn.callAsFunction(null, canvas) as JSArray<JSObject>)
+              .toDart
+              .map((region) => Rect.fromLTWH(
+                    region.getProperty<JSNumber>('x'.toJS).toDartDouble,
+                    region.getProperty<JSNumber>('y'.toJS).toDartDouble,
+                    region.getProperty<JSNumber>('width'.toJS).toDartDouble,
+                    region.getProperty<JSNumber>('height'.toJS).toDartDouble,
+                  ))
+              .toList();
+      expect(
+          regions.any((rect) =>
+              rect.contains(tester.getCenter(find.text('safe label')))),
+          isFalse);
+      expect(
+          regions.any((rect) => rect
+              .contains(tester.getCenter(find.text('nested explicit mask')))),
+          isFalse);
+      for (final finder in [
+        find.text('private sibling'),
+        ...find
+            .byType(EditableText)
+            .evaluate()
+            .map((e) => find.byWidget(e.widget)),
+      ]) {
+        expect(regions.any((rect) => rect.contains(tester.getCenter(finder))),
+            isTrue);
+      }
+    } finally {
+      flutterView.remove();
     }
   });
 

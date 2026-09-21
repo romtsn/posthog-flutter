@@ -1,5 +1,57 @@
 ## Next
 
+## 5.44.3
+
+### Patch Changes
+
+- 8a27e44: Render multiple-choice option labels in the survey text color so they stay readable on dark backgrounds.
+
+## 5.44.2
+
+### Patch Changes
+
+- 2e343e6: Respect configured open-text survey placeholders and leave unset placeholders empty.
+
+## 5.44.1
+
+### Patch Changes
+
+- 5f92452: Honor shuffleOptions in Flutter surveys while keeping Other last and choice order stable while answering.
+
+## 5.44.0
+
+### Minor Changes
+
+- 0552616: Add experimental Android session replay screenshot controls: `screenshotScale` and `screenshotCompressionQuality` for Flutter and native captures, and `screenshotColorMode` for native captures. Scale Flutter captures, masks, and embedded native views together while preserving logical playback dimensions and JPEG encoding.
+
+## 5.43.1
+
+### Patch Changes
+
+- 77c4fe0: Fix a manual `capturePushNotificationOpened()` call double-counting a PostHog notification tap the SDK already captured, using the dedupe added in `posthog-android` 3.65.0 and `posthog-ios` 3.75.0. Update the native SDKs to `posthog-android` 3.65.2 and `posthog-ios` 3.75.2.
+
+## 5.43.0
+
+### Minor Changes
+
+- aa1dea6: Add `PostHogUnmaskWidget` to reveal known-safe Flutter text and images while keeping global masking enabled. Unmasking overrides explicit masks in either nesting order, but sensitive inputs stay masked. Protection covers obscured fields, sensitive keyboard types, and standard autofill hints for personal, contact, address, authentication, and payment data across Material, Cupertino, and direct `EditableText` inputs. Nested unmask regions are subtracted from enclosing masks only when their transforms and clips allow a safe rectangular exclusion. On Flutter web, mounting either wrapper enables canvas masking; declare `canvasCapture.maskRegionsFn: () => null` in `posthog.init`'s `session_recording` configuration to protect frames before the first mount. Native platform views and captured native screens are unaffected.
+
+## 5.42.1
+
+### Patch Changes
+
+- 660270b: Fix `$push_notification_opened` being lost on Android when a notification tap reaches the app before `Posthog().setup()` runs.
+
+## 5.42.0
+
+### Minor Changes
+
+- 66e738c: Add `sessionReplayConfig.maskCustomPaint`, defaulting to `false`, to opt into masking the full bounds of custom-painted widgets independently of text and image masking.
+  
+  Flutter's `maskAllTexts` and `maskAllImages` inspect the widget tree, not arbitrary canvas drawing. Even with those flags enabled, custom-painted text and images require `maskCustomPaint` or an explicit `PostHogMaskWidget`. The new option stays opt-in because it can also mask non-sensitive Material UI, including tab bars, checkboxes, switches, and progress indicators.
+  
+  Framework scrollbar-only painters are excluded so desktop scrollable viewports remain visible, while their children are still checked for masks. With `maskCustomPaint` enabled, frames containing painters with unknown bounds, including zero-sized painters, are skipped rather than sent unmasked.
+
 ## 5.41.1
 
 ### Patch Changes

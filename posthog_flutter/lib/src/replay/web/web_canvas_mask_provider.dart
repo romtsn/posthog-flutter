@@ -14,6 +14,7 @@ import '../../posthog_config.dart';
 import '../../posthog_flutter_web_handler.dart';
 import '../../util/logging.dart';
 import '../mask/posthog_mask_controller.dart';
+import '../session_replay_config_extension.dart';
 import 'web_canvas_mask_geometry.dart';
 
 extension type _JSMaskRegion._(JSObject _) implements JSObject {
@@ -50,8 +51,8 @@ enum _ApplyResult {
 /// An app opts in either by declaring `maskRegionsFn` in its
 /// `posthog.init` call — declaring it as `() => null` also covers the frames
 /// captured before this provider takes over — or by mounting a
-/// `PostHogMaskWidget`, which registers the provider on first mount. Without
-/// either, nothing is registered and recording is left exactly as posthog-js
+/// `PostHogMaskWidget` or `PostHogUnmaskWidget`, which registers the provider on
+/// first mount. Otherwise nothing is registered and recording is left as posthog-js
 /// configured it.
 ///
 /// Fails closed: a failed widget-tree walk returns null, which makes
@@ -84,7 +85,7 @@ class WebCanvasMaskProvider {
   @visibleForTesting
   static web.Element? debugOwnViewHostOverride;
 
-  /// Opts the app into canvas masking because a `PostHogMaskWidget` mounted.
+  /// Opts into canvas masking when a mask or unmask widget mounts.
   ///
   /// Called from shared widget code through a conditional import, so it must
   /// stay safe to call any number of times; a mount that happens before
@@ -288,7 +289,7 @@ class WebCanvasMaskProvider {
       _objectAssign(canvasCapture, existingCanvasCapture as JSObject);
     }
     // the app opts into canvas masking by declaring maskRegionsFn in
-    // posthog.init or by mounting a PostHogMaskWidget — registering regardless
+    // posthog.init or by mounting a mask/unmask widget — registering regardless
     // would restart an in-flight recording and drop the semantics tree for
     // apps that never asked
     if (!canvasCapture.has('maskRegionsFn') && !_maskWidgetMounted) {
@@ -342,10 +343,10 @@ class WebCanvasMaskProvider {
   void _warnNotOptedIn(JSObject sessionRecording) {
     printIfDebug(
       'PostHog: Flutter web canvas masking is off — mount a PostHogMaskWidget '
-      'or declare maskRegionsFn in posthog.init to enable it.',
+      'or PostHogUnmaskWidget, or declare maskRegionsFn in posthog.init to enable it.',
     );
     final replayConfig = _config.sessionReplayConfig;
-    if (!replayConfig.maskAllTexts && !replayConfig.maskAllImages) {
+    if (!replayConfig.masksAnyContent) {
       return;
     }
     final captureCanvas =
@@ -359,7 +360,7 @@ class WebCanvasMaskProvider {
       web.console.warn(
         'PostHog: canvas session recording is enabled but masking is not, so '
                 'text painted by Flutter is recorded unmasked. Mount a '
-                'PostHogMaskWidget to enable masking, or declare '
+                'PostHogMaskWidget or PostHogUnmaskWidget to enable masking, or declare '
                 'maskRegionsFn in posthog.init (see the posthog_flutter '
                 'CHANGELOG for the snippet).'
             .toJS,
@@ -489,7 +490,7 @@ class WebCanvasMaskProvider {
       if (!_warnedMaskWidgetOutsideTree) {
         _warnedMaskWidgetOutsideTree = true;
         printIfDebug(
-          'PostHog: a PostHogMaskWidget is mounted outside the PostHogWidget '
+          'PostHog: a mask/unmask widget is mounted outside the PostHogWidget '
           'tree, so masking could never cover it — canvas frames are skipped '
           'until it is moved inside PostHogWidget or removed.',
         );
@@ -644,8 +645,7 @@ class WebCanvasMaskProvider {
 
     final replayConfig = _config.sessionReplayConfig;
     final elements = PostHogMaskController.instance.getMaskElements(
-      includeAllWidgets:
-          replayConfig.maskAllTexts || replayConfig.maskAllImages,
+      includeAllWidgets: replayConfig.masksAnyContent,
     );
     if (elements == null) {
       _cachedContainerRects = null;

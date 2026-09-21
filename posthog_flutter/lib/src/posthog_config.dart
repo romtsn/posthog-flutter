@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:meta/meta.dart';
+
 import 'logs/posthog_log_record.dart';
 import 'posthog.dart';
 import 'posthog_event.dart';
@@ -673,6 +675,19 @@ class PostHogRageClickConfig {
   }
 }
 
+/// Pixel format for Android native-screen captures in session replay.
+@experimental
+enum PostHogScreenshotColorMode {
+  /// Preserve alpha and eight-bit color channels before compression.
+  argb8888,
+
+  /// Use half the bitmap memory with reduced color precision and no alpha.
+  ///
+  /// Transparent native window regions appear black. Devices that reject
+  /// this format fall back to [argb8888].
+  rgb565,
+}
+
 /// Configuration for mobile session replay capture and masking.
 ///
 /// Assign an instance to [PostHogConfig.sessionReplayConfig] before calling
@@ -691,7 +706,25 @@ class PostHogSessionReplayConfig {
   var captureTouches = true;
 
   /// Enable masking of all text and text input fields.
-  /// Default: true.
+  /// Default: true. Wrap known-safe Flutter content in `PostHogUnmaskWidget`
+  /// to reveal it without disabling masking globally.
+  ///
+  /// Sensitive Flutter inputs stay masked regardless of this flag, explicit
+  /// masks, or unmask widgets. This includes `obscureText`, password, email,
+  /// phone, name, address and URL keyboard types, and standard Flutter autofill
+  /// hints for identity, contact, address, authentication, and payment data.
+  /// Inputs without these signals are not automatically classified as
+  /// sensitive. Annotate them appropriately or keep global masking enabled.
+  /// `PostHogUnmaskWidget` overrides global and explicit masks for other content.
+  ///
+  /// Flutter web requires canvas masking to be enabled by mounting a
+  /// `PostHogMaskWidget` or `PostHogUnmaskWidget` inside `PostHogWidget`, or by
+  /// declaring `session_recording.canvasCapture.maskRegionsFn` in `posthog.init`.
+  /// Declare it as `() => null` to skip frames before Flutter installs its mask
+  /// provider. Canvas recording must be enabled separately.
+  ///
+  /// Does not mask text drawn by CustomPainter. Enable [maskCustomPaint] or
+  /// wrap sensitive custom-painted widgets in PostHogMaskWidget to mask them.
   ///
   /// With [captureNativeScreens] enabled, setting this false also unmasks text
   /// on captured native screens, including native input fields (passwords,
@@ -699,8 +732,29 @@ class PostHogSessionReplayConfig {
   var maskAllTexts = true;
 
   /// Enable masking of all images.
-  /// Default: true.
+  /// Default: true. `PostHogUnmaskWidget` can reveal known-safe Flutter images;
+  /// it overrides explicit masks within the same subtree too. Flutter web
+  /// requires canvas masking to be enabled as described in [maskAllTexts].
+  ///
+  /// Does not mask images drawn by CustomPainter. Enable [maskCustomPaint] or
+  /// wrap sensitive custom-painted widgets in PostHogMaskWidget to mask them.
   var maskAllImages = true;
+
+  /// Mask the full bounds of CustomPaint widgets with a painter or
+  /// foregroundPainter, including their children.
+  /// Default: false.
+  ///
+  /// This is independent of [maskAllTexts] and [maskAllImages]. Canvas contents
+  /// cannot be inspected for individual text or images, so enabling this also
+  /// masks custom-painted decorations in Flutter widgets, including TabBar,
+  /// checkboxes, switches, and progress indicators. Framework scrollbar-only
+  /// painters are excluded, but their children are still checked for masks.
+  /// Disable MaterialApp's debugShowCheckedModeBanner when using this option:
+  /// its full-window CustomPaint otherwise masks the entire screen.
+  ///
+  /// Frames containing a painter whose bounds cannot be determined, such as a
+  /// zero-sized CustomPaint, are skipped rather than sent with a missing mask.
+  var maskCustomPaint = false;
 
   /// Deprecated setter that forwards assigned values to [throttleDelay].
   ///
@@ -725,6 +779,49 @@ class PostHogSessionReplayConfig {
   /// Local config has precedence over remote config when both are set.
   /// If null, sampling is controlled by remote config (when available).
   double? sampleRate;
+
+  /// Multiplier for the width and height of Android replay screenshots.
+  ///
+  /// Flutter screenshots scale from their logical-resolution baseline; native
+  /// screens recorded with [captureNativeScreens] scale from physical resolution.
+  /// Defaults to `1.0`. Values are clamped to `0.1`–`1.0`; NaN and infinity use
+  /// `1.0`. Scaled dimensions round up to at least one pixel without changing the
+  /// logical replay viewport. Masks round outward to cover output pixels; frames
+  /// with mask bounds that cannot be mapped safely are skipped.
+  /// Set before `Posthog().setup(config)`.
+  @experimental
+  double get screenshotScale => _screenshotScale;
+  double _screenshotScale = 1.0;
+
+  @experimental
+  set screenshotScale(double value) {
+    _screenshotScale = value.isFinite ? value.clamp(0.1, 1.0) : 1.0;
+  }
+
+  /// Compression quality for Android replay screenshots.
+  ///
+  /// Flutter screenshots use JPEG; native screens recorded with
+  /// [captureNativeScreens] use WebP. Defaults to `30`, clamped to `0`–`100`.
+  /// Higher values generally retain more detail and produce larger payloads.
+  /// Native capture on Android 10 uses lossless WebP at quality `100`; other
+  /// supported versions use lossy WebP. Does not change resolution.
+  /// Set before `Posthog().setup(config)`.
+  @experimental
+  int get screenshotCompressionQuality => _screenshotCompressionQuality;
+  int _screenshotCompressionQuality = 30;
+
+  @experimental
+  set screenshotCompressionQuality(int value) {
+    _screenshotCompressionQuality = value.clamp(0, 100);
+  }
+
+  /// Pixel format for Android native-screen captures.
+  ///
+  /// Applies only to screens recorded with [captureNativeScreens].
+  /// Defaults to [PostHogScreenshotColorMode.argb8888].
+  /// Set before `Posthog().setup(config)`.
+  @experimental
+  var screenshotColorMode = PostHogScreenshotColorMode.argb8888;
 
   /// Mask all platform views (WebView, Maps, etc.) in session replay.
   ///
@@ -812,6 +909,9 @@ class PostHogSessionReplayConfig {
       'maskAllPlatformViews': maskAllPlatformViews,
       'captureNativeScreens': captureNativeScreens,
       'verifyScreenshotMaskAlignment': verifyScreenshotMaskAlignment,
+      'screenshotScale': screenshotScale,
+      'screenshotCompressionQuality': screenshotCompressionQuality,
+      'screenshotColorMode': screenshotColorMode.name,
       if (sampleRate != null) 'sampleRate': sampleRate,
     };
   }
