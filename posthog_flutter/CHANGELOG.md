@@ -1,5 +1,49 @@
 ## Next
 
+## 5.50.0
+
+### Minor Changes
+
+- 9803604: Attach `$app_version` and `$app_build` to web events, read from the `FLUTTER_BUILD_NAME` / `FLUTTER_BUILD_NUMBER` compile-time constants (Flutter 3.47+), so web events carry the running app's version like iOS and Android do.
+
+## 5.49.0
+
+### Minor Changes
+
+- fbe5397: Add the `compression` config (`PostHogCompression.gzip` / `none`) so an app can send request bodies uncompressed, e.g. when a managed network or work profile alters the compressed body in transit.
+
+## 5.48.0
+
+### Minor Changes
+
+- b155321: Support survey partial responses and persistent resume on iOS and Android. Submitted answers and the next question are restored after SDK recreation, while completing or dismissing a survey, or calling reset, clears saved progress. Requires PostHog iOS >= 3.80.0 and Android >= 3.70.0.
+  
+  Fix skipping optional answers on Android, which could previously fail when the response was null.
+
+## 5.47.0
+
+### Minor Changes
+
+- 36fcf5a: Add `$recording_status` and `$sdk_debug_*` session replay debug properties to captured events via the native SDKs, forward `throttleDelay` to the native replay config, and raise the native floors to posthog-ios 3.80.0 and posthog-android 3.69.0
+
+## 5.46.0
+
+### Minor Changes
+
+- 39bd554: Add `sessionReplayConfig.textMaskPolicy` to mask text at glyph precision instead of all-or-nothing. A policy is a `PostHogTextMask Function(String text, Widget widget)` that decides per text node whether to mask all of it, none of it, only some character ranges, or everything except some ranges — using the node's rendered string, the widget that produced it, or both — so an app can hide amounts and card numbers while the labels around them stay readable. Ships with `PostHogTextMaskPolicies.digits()`, `.redact(RegExp)` and `.reveal(RegExp)`. Applies to `Text`, `RichText`, and non-sensitive text inputs; sensitive inputs, `PostHogMaskWidget`, and `PostHogUnmaskWidget` keep precedence, and the policy fails closed by masking the whole node when it throws or returns a range outside the text.
+
+## 5.45.0
+
+### Minor Changes
+
+- 7f660c8: Support automatic submission for survey ratings and single-choice questions without an open choice when skipSubmitButton is enabled. Requires PostHog iOS 3.77.0 and Android 3.66.4 or newer.
+
+## 5.44.4
+
+### Patch Changes
+
+- 3cfa388: Document that on iOS `maskAllPlatformViews = false` and `PostHogPlatformViewPrivacy.capture` only reveal WKWebView-backed `UiKitView`s (maps and other native views stay masked), and log in debug builds when the native side declines a platform view capture and the view is masked instead (#593).
+
 ## 5.44.3
 
 ### Patch Changes

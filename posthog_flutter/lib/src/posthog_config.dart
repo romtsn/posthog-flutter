@@ -6,6 +6,7 @@ import 'logs/posthog_log_record.dart';
 import 'posthog.dart';
 import 'posthog_event.dart';
 import 'posthog_flutter_platform_interface.dart';
+import 'replay/mask/posthog_text_mask.dart';
 import 'util/logging.dart';
 
 /// Callback to intercept and modify events before they are sent to PostHog.
@@ -52,6 +53,16 @@ enum PostHogPersonProfiles {
 
   /// Create or update person profiles only after the user has been identified.
   identifiedOnly,
+}
+
+/// Controls how the SDK compresses request bodies before sending them to the
+/// PostHog API.
+enum PostHogCompression {
+  /// Gzip request bodies.
+  gzip,
+
+  /// Send request bodies uncompressed.
+  none,
 }
 
 /// Controls which network connection types can be used for sending data.
@@ -166,6 +177,18 @@ class PostHogConfig {
   ///
   /// Defaults to [PostHogPersonProfiles.identifiedOnly].
   var personProfiles = PostHogPersonProfiles.identifiedOnly;
+
+  /// Controls how request bodies are compressed before being sent to PostHog.
+  ///
+  /// Set this to [PostHogCompression.none] when something between the app and
+  /// PostHog, e.g. a managed network or work profile, alters the gzip body.
+  ///
+  /// **Flutter web:** not applied. The web SDK hooks onto an already-initialized
+  /// posthog-js instance, so set `disable_compression: true` in your
+  /// `posthog.init({...})` call instead to match [PostHogCompression.none].
+  ///
+  /// Defaults to [PostHogCompression.gzip].
+  var compression = PostHogCompression.gzip;
 
   /// Whether mobile session replay is enabled for Android and iOS.
   ///
@@ -403,6 +426,7 @@ class PostHogConfig {
       'optOut': optOut,
       'surveys': surveys,
       'personProfiles': personProfiles.name,
+      'compression': compression.name,
       'sessionReplay': sessionReplay,
       'dataMode': dataMode.name,
       'sessionReplayConfig': sessionReplayConfig.toMap(),
@@ -756,6 +780,72 @@ class PostHogSessionReplayConfig {
   /// zero-sized CustomPaint, are skipped rather than sent with a missing mask.
   var maskCustomPaint = false;
 
+  /// Decides, per text node, what to mask — instead of all-or-nothing.
+  ///
+  /// When set, every plain `Text`, `RichText`, and non-sensitive text input is
+  /// masked according to the [PostHogTextMask] the policy returns for its
+  /// rendered string, and [maskAllTexts] no longer applies to those nodes.
+  /// Ranges are masked at glyph precision, so a policy can hide an amount
+  /// while the label next to it stays readable:
+  ///
+  /// ```dart
+  /// // Mask numbers only: "Balance ₦2,450,000.00" keeps "Balance" visible.
+  /// config.sessionReplayConfig.textMaskPolicy =
+  ///     PostHogTextMaskPolicies.digits();
+  ///
+  /// // Mask everything except a known-safe pattern.
+  /// config.sessionReplayConfig.textMaskPolicy =
+  ///     PostHogTextMaskPolicies.reveal(RegExp(r'^(Continue|Cancel)$'));
+  ///
+  /// // Or decide per node, using its text, its widget, or both — here, two
+  /// // nodes with the same string are told apart by style.
+  /// config.sessionReplayConfig.textMaskPolicy = (text, widget) =>
+  ///     widget is RichText && widget.text.style?.fontWeight == FontWeight.bold
+  ///         ? const PostHogTextMask.none()
+  ///         : const PostHogTextMask.all();
+  /// ```
+  ///
+  /// [widget] is whichever widget actually produced the render object being
+  /// captured — `RichText` for `Text` and `RichText` alike, `EditableText`
+  /// for text inputs. It is not the outer `Text`/`TextField` an app writes:
+  /// `Text` is a thin wrapper over `RichText`, and there is no reliable way
+  /// to recover it across Flutter's internal composition. Reach for its
+  /// style, its `InlineSpan`, or (for inputs) properties like `obscureText`
+  /// and `readOnly` — not its `key`, which will be the framework's, not the
+  /// app's.
+  ///
+  /// Precedence, highest first: sensitive inputs (`obscureText`, password,
+  /// card, and other sensitive autofill hints) are always fully masked;
+  /// `PostHogMaskWidget` masks and `PostHogUnmaskWidget` reveals its subtree
+  /// without consulting the policy; then the policy decides; [maskAllTexts]
+  /// only applies to text nodes when no policy is set.
+  ///
+  /// The policy runs on the UI thread for every captured text node; keep it
+  /// fast. It applies to the Flutter widget tree only — text on captured
+  /// native screens still follows [maskAllTexts], and custom-painted text
+  /// still needs [maskCustomPaint]. Can be changed at runtime; the next
+  /// frame uses the new policy.
+  ///
+  /// It fails closed. Where glyph-precise rects can't be trusted to cover
+  /// everything the decision asked to hide, the whole node is masked
+  /// instead:
+  ///
+  ///  * the policy throws, or its ranges throw while being read;
+  ///  * a range falls outside the text, or cuts into a grapheme cluster —
+  ///    Flutter lays out no box for the severed half, so it would otherwise
+  ///    stay readable;
+  ///  * the node's style paints `shadows`, which selection boxes don't
+  ///    bound, so a masked glyph could leave a readable copy of itself
+  ///    wherever its shadow lands;
+  ///  * the node is a paragraph containing a `WidgetSpan` and the decision
+  ///    yields anything other than exactly one rect — including
+  ///    `PostHogTextMask.none()` and `PostHogTextMask.only([])`. A
+  ///    `PostHogUnmaskWidget` nested in that paragraph still reveals its
+  ///    own subtree.
+  ///
+  /// Default: null.
+  PostHogTextMaskPolicy? textMaskPolicy;
+
   /// Deprecated setter that forwards assigned values to [throttleDelay].
   ///
   /// Debouncer delay used to reduce the number of snapshots captured and reduce
@@ -834,6 +924,10 @@ class PostHogSessionReplayConfig {
   /// Setting this false reveals every texture-backed view, including camera
   /// previews (e.g. the `camera` plugin) — prefer per-view
   /// [PostHogPlatformView] opt-ins over the global opt-out.
+  ///
+  /// **iOS note:** among `UiKitView`s, setting this false only reveals
+  /// [WKWebView]-backed ones; maps, ARKit and other native views stay masked.
+  /// See [PostHogPlatformViewPrivacy.capture].
   ///
   /// Applies only to native views embedded in the Flutter layout. For native
   /// screens presented over the whole app, see [captureNativeScreens].

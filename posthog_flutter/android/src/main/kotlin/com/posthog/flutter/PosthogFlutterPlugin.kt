@@ -24,6 +24,7 @@ import androidx.annotation.VisibleForTesting
 import com.posthog.PersonProfiles
 import com.posthog.PostHog
 import com.posthog.PostHogBootstrapConfig
+import com.posthog.PostHogCompression
 import com.posthog.PostHogConfig
 import com.posthog.PostHogOnFeatureFlags
 import com.posthog.android.PostHogAndroid
@@ -611,6 +612,12 @@ class PosthogFlutterPlugin :
                         "identifiedOnly" -> personProfiles = PersonProfiles.IDENTIFIED_ONLY
                     }
                 }
+                posthogConfig.getIfNotNull<String>("compression") {
+                    when (it) {
+                        "gzip" -> compression = PostHogCompression.GZIP
+                        "none" -> compression = PostHogCompression.NONE
+                    }
+                }
                 posthogConfig.getIfNotNull<Boolean>("sessionReplay") {
                     sessionReplay = it
                 }
@@ -621,6 +628,9 @@ class PosthogFlutterPlugin :
                     this.sessionReplayConfig.captureTouches = replayConfig["captureTouches"] as? Boolean ?: true
                     replayConfig.getIfNotNull<Double>("sampleRate") {
                         this.sessionReplayConfig.sampleRate = it
+                    }
+                    (replayConfig["throttleDelayMs"] as? Number)?.let {
+                        this.sessionReplayConfig.throttleDelayMs = it.toLong()
                     }
                     this.sessionReplayConfig.verifyScreenshotMaskAlignment =
                         replayConfig["verifyScreenshotMaskAlignment"] as? Boolean ?: false

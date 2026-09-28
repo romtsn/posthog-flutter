@@ -14,6 +14,7 @@ fun PostHogDisplaySurvey.toMap(): Map<String, Any?> {
         mutableMapOf<String, Any?>(
             "id" to id,
             "name" to name,
+            "initialQuestionIndex" to initialQuestionIndex,
             "questions" to
                 questions.map { question: PostHogDisplaySurveyQuestion ->
                     val questionMap =
@@ -36,6 +37,7 @@ fun PostHogDisplaySurvey.toMap(): Map<String, Any?> {
 
                         is PostHogDisplayRatingQuestion -> {
                             questionMap["type"] = "rating"
+                            questionMap["skipSubmitButton"] = question.skipSubmitButton
                             questionMap["ratingType"] = question.ratingType.value
                             questionMap["scaleLowerBound"] = question.scaleLowerBound
                             questionMap["scaleUpperBound"] = question.scaleUpperBound
@@ -45,6 +47,7 @@ fun PostHogDisplaySurvey.toMap(): Map<String, Any?> {
 
                         is PostHogDisplayChoiceQuestion -> {
                             questionMap["type"] = if (question.isMultipleChoice) "multiple_choice" else "single_choice"
+                            questionMap["skipSubmitButton"] = question.skipSubmitButton
                             questionMap["choices"] = question.choices
                             questionMap["hasOpenChoice"] = question.hasOpenChoice
                             questionMap["shuffleOptions"] = question.shuffleOptions
