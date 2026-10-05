@@ -1,5 +1,85 @@
 ## Next
 
+## 5.50.13
+
+### Patch Changes
+
+- b064e83: Show a survey that arrives before `PosthogObserver` has a context once the next navigation happens, instead of dropping it and blocking later surveys.
+
+## 5.50.12
+
+### Patch Changes
+
+- cadba6d: Reapply Dart automatic error-capture hooks when setup is called again with changed flags.
+
+## 5.50.11
+
+### Patch Changes
+
+- 890e432: Parse survey question `id` from native payloads instead of using the question type.
+
+## 5.50.10
+
+### Patch Changes
+
+- 56293ae: Preserve chained error handlers after teardown and prevent duplicate exception captures when error tracking restarts.
+
+## 5.50.9
+
+### Patch Changes
+
+- 66c9257: Stop calling the deprecated `getFeatureFlagPayload` of the PostHog iOS SDK on iOS and macOS, which is removed in its next major version.
+
+## 5.50.8
+
+### Patch Changes
+
+- a5ce763: Correct in-app error tracking configuration examples to use bare Dart package names.
+- 2bd9632: Fix session replay keeping the original screen size after the app's window is resized, such as when it rotates or a foldable is folded or unfolded.
+
+## 5.50.7
+
+### Patch Changes
+
+- afc14aa: Let optional open-text and rating survey questions be skipped, and use the question's button label.
+
+## 5.50.6
+
+### Patch Changes
+
+- 99075ad: Close a completed survey immediately when its appearance turns the thank-you screen off.
+
+## 5.50.5
+
+### Patch Changes
+
+- 9b6fb05: Record a skipped optional multiple-choice survey question as no answer instead of an empty list.
+- 0ebaae9: Use the screen name argument when properties also contain `$screen_name`.
+
+## 5.50.4
+
+### Patch Changes
+
+- 4d5268d: Retry a session replay snapshot on iOS when it fails to encode, instead of dropping it.
+
+## 5.50.3
+
+### Patch Changes
+
+- 2f164dd: Retry a session replay snapshot when the native channel call fails instead of marking it delivered.
+
+## 5.50.2
+
+### Patch Changes
+
+- 06a40c2: Keep legacy `$set` and `$set_once` person properties when the nested map comes from JSON.
+
+## 5.50.1
+
+### Patch Changes
+
+- a71971e: Run `beforeSend` for `capture`, `screen`, and `captureException` on Flutter web.
+
 ## 5.50.0
 
 ### Minor Changes

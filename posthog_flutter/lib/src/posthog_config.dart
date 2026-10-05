@@ -377,8 +377,8 @@ class PostHogConfig {
   /// **Note:**
   /// - Callbacks can be synchronous or asynchronous (via
   ///   `FutureOr<PostHogEvent?>`)
-  /// - Exceptions in a callback will skip that callback and continue with the
-  ///   next one in the list.
+  /// - If a callback throws, the event is dropped and later callbacks are not
+  ///   called.
   /// - If any callback returns `null`, the event is dropped and subsequent
   ///   callbacks are not called.
   List<BeforeSendCallback> beforeSend = [];
@@ -1018,11 +1018,13 @@ class PostHogErrorTrackingConfig {
 
   /// List of package names to be considered in-app frames for exception tracking.
   ///
+  /// Use bare Dart package names without the `package:` URI prefix.
+  ///
   /// Example:
   /// ```dart
   /// config.errorTrackingConfig.inAppIncludes.addAll([
-  ///   'package:your_app',
-  ///   'package:your_company_utils',
+  ///   'your_app',
+  ///   'your_company_utils',
   /// ]);
   /// ```
   ///
@@ -1031,8 +1033,8 @@ class PostHogErrorTrackingConfig {
   ///
   /// This option takes precedence over inAppExcludes.
   /// For Flutter/Dart, this typically includes:
-  /// - Your app's main package (e.g., "package:your_app")
-  /// - Any internal packages you own (e.g., "package:your_company_utils")
+  /// - Your app's main package (e.g., "your_app")
+  /// - Any internal packages you own (e.g., "your_company_utils")
   ///
   /// **Note:**
   /// - Flutter web: Not supported
@@ -1041,11 +1043,13 @@ class PostHogErrorTrackingConfig {
 
   /// List of package names to exclude from in-app frames for exception tracking.
   ///
+  /// Use bare Dart package names without the `package:` URI prefix.
+  ///
   /// Example:
   /// ```dart
   /// config.errorTrackingConfig.inAppExcludes.addAll([
-  ///   'package:third_party_lib',
-  ///   'package:analytics_package',
+  ///   'third_party_lib',
+  ///   'analytics_package',
   /// ]);
   /// ```
   ///
