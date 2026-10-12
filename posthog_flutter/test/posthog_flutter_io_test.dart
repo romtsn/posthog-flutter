@@ -122,6 +122,22 @@ void main() {
     });
 
     test(
+      'setup sends the Flutter version for native lifecycle events',
+      skip: const String.fromEnvironment('FLUTTER_VERSION').isEmpty
+          ? 'FLUTTER_VERSION is only defined on Flutter 3.32+'
+          : null,
+      () async {
+        await posthogFlutterIO.setup(PostHogConfig('test_project_token'));
+
+        final call = log.firstWhere((c) => c.method == 'setup');
+        expect(
+          (call.arguments as Map)['flutterVersion'],
+          const String.fromEnvironment('FLUTTER_VERSION'),
+        );
+      },
+    );
+
+    test(
       'invokes callback when native sends onFeatureFlagsCallback event',
       () async {
         bool callbackInvoked = false;

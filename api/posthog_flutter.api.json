@@ -2175,7 +2175,7 @@
                     },
                     {
                         "entryPoints": [],
-                        "isDeprecated": false,
+                        "isDeprecated": true,
                         "isExperimental": false,
                         "isReadable": true,
                         "isStatic": false,
@@ -2242,6 +2242,17 @@
                     {
                         "entryPoints": [],
                         "isDeprecated": false,
+                        "isExperimental": false,
+                        "isReadable": true,
+                        "isStatic": false,
+                        "isWriteable": true,
+                        "name": "sendFeatureFlagEvent",
+                        "relativePath": "lib/src/posthog_config.dart",
+                        "typeName": "bool"
+                    },
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": true,
                         "isExperimental": false,
                         "isReadable": true,
                         "isStatic": false,
@@ -2761,7 +2772,7 @@
                     },
                     {
                         "entryPoints": [],
-                        "isDeprecated": false,
+                        "isDeprecated": true,
                         "isExperimental": false,
                         "isReadable": false,
                         "isStatic": false,
@@ -2941,7 +2952,7 @@
                     },
                     {
                         "entryPoints": [],
-                        "isDeprecated": false,
+                        "isDeprecated": true,
                         "isExperimental": false,
                         "isReadable": true,
                         "isStatic": true,
@@ -4333,7 +4344,7 @@
                         "isDeprecated": false,
                         "isExperimental": false,
                         "isStatic": false,
-                        "name": "disable",
+                        "name": "optOut",
                         "parameters": [],
                         "relativePath": "lib/src/posthog.dart",
                         "returnTypeName": "Future<void>",
@@ -4343,6 +4354,30 @@
                     {
                         "entryPoints": [],
                         "isDeprecated": false,
+                        "isExperimental": false,
+                        "isStatic": false,
+                        "name": "optIn",
+                        "parameters": [],
+                        "relativePath": "lib/src/posthog.dart",
+                        "returnTypeName": "Future<void>",
+                        "type": "method",
+                        "typeParameterNames": []
+                    },
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": true,
+                        "isExperimental": false,
+                        "isStatic": false,
+                        "name": "disable",
+                        "parameters": [],
+                        "relativePath": "lib/src/posthog.dart",
+                        "returnTypeName": "Future<void>",
+                        "type": "method",
+                        "typeParameterNames": []
+                    },
+                    {
+                        "entryPoints": [],
+                        "isDeprecated": true,
                         "isExperimental": false,
                         "isStatic": false,
                         "name": "enable",
@@ -5317,50 +5352,6 @@
                         "isExperimental": false,
                         "isStatic": false,
                         "name": "new",
-                        "parameters": [],
-                        "relativePath": "lib/src/posthog_widget.dart",
-                        "returnTypeName": "PostHogWidgetState",
-                        "type": "constructor",
-                        "typeParameterNames": []
-                    }
-                ],
-                "fieldDeclarations": [
-                    {
-                        "entryPoints": [],
-                        "isDeprecated": false,
-                        "isExperimental": false,
-                        "isReadable": true,
-                        "isStatic": false,
-                        "isWriteable": false,
-                        "name": "debugFlutterCaptureSuppressed",
-                        "relativePath": "lib/src/posthog_widget.dart",
-                        "typeName": "bool"
-                    }
-                ],
-                "isDeprecated": false,
-                "isExperimental": false,
-                "isRequired": false,
-                "isSealed": false,
-                "name": "PostHogWidgetState",
-                "relativePath": "lib/src/posthog_widget.dart",
-                "superTypeNames": [
-                    "State<PostHogWidget>",
-                    "Object",
-                    "Diagnosticable"
-                ],
-                "typeParameterNames": []
-            },
-            {
-                "entryPoints": [
-                    "posthog_flutter.dart"
-                ],
-                "executableDeclarations": [
-                    {
-                        "entryPoints": [],
-                        "isDeprecated": false,
-                        "isExperimental": false,
-                        "isStatic": false,
-                        "name": "new",
                         "parameters": [
                             {
                                 "isDeprecated": false,
@@ -5410,38 +5401,6 @@
                     "StatefulWidget",
                     "Widget",
                     "DiagnosticableTree",
-                    "Object",
-                    "Diagnosticable"
-                ],
-                "typeParameterNames": []
-            },
-            {
-                "entryPoints": [
-                    "posthog_flutter.dart"
-                ],
-                "executableDeclarations": [
-                    {
-                        "entryPoints": [],
-                        "isDeprecated": false,
-                        "isExperimental": false,
-                        "isStatic": false,
-                        "name": "new",
-                        "parameters": [],
-                        "relativePath": "lib/src/replay/mask/posthog_mask_widget.dart",
-                        "returnTypeName": "PostHogMaskWidgetState",
-                        "type": "constructor",
-                        "typeParameterNames": []
-                    }
-                ],
-                "fieldDeclarations": [],
-                "isDeprecated": false,
-                "isExperimental": false,
-                "isRequired": false,
-                "isSealed": false,
-                "name": "PostHogMaskWidgetState",
-                "relativePath": "lib/src/replay/mask/posthog_mask_widget.dart",
-                "superTypeNames": [
-                    "State<PostHogMaskWidget>",
                     "Object",
                     "Diagnosticable"
                 ],

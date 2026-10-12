@@ -12,6 +12,7 @@ import 'surveys/models/survey_callbacks.dart';
 import 'error_tracking/dart_exception_processor.dart';
 import 'utils/before_send.dart';
 import 'utils/capture_utils.dart';
+import 'utils/flutter_version.dart';
 import 'utils/property_normalizer.dart';
 
 import 'feature_flag_result.dart';
@@ -204,7 +205,10 @@ class PosthogFlutterIO extends PosthogFlutterPlatformInterface {
     _beforeSendCallbacks = config.beforeSend;
 
     try {
-      await _methodChannel.invokeMethod('setup', config.toMap());
+      await _methodChannel.invokeMethod('setup', {
+        ...config.toMap(),
+        ...flutterVersionSetupArguments(),
+      });
     } on PlatformException catch (exception) {
       printIfDebug('Exeption on setup: $exception');
     }
