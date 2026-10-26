@@ -1,5 +1,23 @@
 ## Next
 
+## 5.56.2
+
+### Patch Changes
+
+- 94ca664: Omit numeric NaN and infinities from Windows/Linux event object properties and send them as null in arrays instead of strings. Preserve array positions and valid neighboring properties, and budget exception steps using their final wire form.
+
+## 5.56.1
+
+### Patch Changes
+
+- 7fa8179: Stop `PosthogObserver` from registering itself with `WidgetsBinding` and never unregistering, which leaked one observer per navigator, such as each nested auto_route router.
+
+## 5.56.0
+
+### Minor Changes
+
+- 27eada6: Apply the survey appearance `fontFamily` to the built-in survey UI. The font must be bundled with the app; a missing, blank, `inherit`, or unbundled family uses the default font.
+
 ## 5.55.0
 
 ### Minor Changes
