@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:posthog_flutter/src/error_tracking/posthog_error_tracking_autocapture_integration.dart';
+import 'package:posthog_flutter/src/feature_flag_result.dart';
 import 'package:posthog_flutter/src/posthog_config.dart';
 import 'package:posthog_flutter/src/posthog_desktop_app_info.dart';
 import 'package:posthog_flutter/src/posthog_flutter_desktop.dart';
@@ -92,6 +93,7 @@ void main() {
           platform.getFeatureFlagPayload(key: 'flag'),
       'getFeatureFlagResult': (platform) =>
           platform.getFeatureFlagResult(key: 'flag'),
+      'getAllFeatureFlags': (platform) => platform.getAllFeatureFlags(),
       'getSessionId': (platform) => platform.getSessionId(),
     };
 
@@ -1743,6 +1745,146 @@ void main() {
       expect(result?.variant, 'test-variant');
       final called = await server.waitForEvent(r'$feature_flag_called');
       expect(_propertiesOf(called)[r'$feature_flag'], 'variant-flag');
+    });
+
+    test(
+        'captureFeatureView and captureFeatureInteraction match the native event shape',
+        () async {
+      final server = await LocalPostHogServer.start();
+      server.respond = (_) => PostHogResponse.json(_variantFlagResponse());
+      final flagsLoaded = Completer<void>();
+      final config = configFor(server)
+        ..onFeatureFlags = () {
+          if (!flagsLoaded.isCompleted) flagsLoaded.complete();
+        };
+      final platform = await setUpPlatform(config);
+      await flagsLoaded.future;
+
+      await platform.captureFeatureView(flag: 'variant-flag');
+      await platform.captureFeatureInteraction(
+          flag: 'other-flag', flagVariant: 'explicit');
+      await platform.captureFeatureView(flag: 'unknown-flag');
+      await platform.capture(eventName: 'sentinel event');
+      await server.waitForEvent('sentinel event');
+
+      final view = _propertiesOf(await server.waitForEvent(r'$feature_view'));
+      expect(view['feature_flag'], 'variant-flag');
+      expect(view['feature_flag_variant'], 'test-variant');
+      expect(view[r'$set'], {r'$feature_view/variant-flag': 'test-variant'});
+
+      final interaction =
+          _propertiesOf(await server.waitForEvent(r'$feature_interaction'));
+      expect(interaction['feature_flag'], 'other-flag');
+      expect(interaction['feature_flag_variant'], 'explicit');
+      expect(interaction[r'$set'],
+          {r'$feature_interaction/other-flag': 'explicit'});
+
+      expect(server.eventNames.where((name) => name == r'$feature_view'),
+          hasLength(1));
+      expect(server.eventNames, isNot(contains(r'$feature_flag_called')));
+    });
+
+    test('captureFeatureView keeps the user it was called for across reset',
+        () async {
+      final server = await LocalPostHogServer.start();
+      server.respond = (_) => PostHogResponse.json(_variantFlagResponse());
+      final flagsLoaded = Completer<void>();
+      final config = configFor(server)
+        ..onFeatureFlags = () {
+          if (!flagsLoaded.isCompleted) flagsLoaded.complete();
+        };
+      final platform = await setUpPlatform(config);
+      await flagsLoaded.future;
+      final distinctId = await platform.getDistinctId();
+
+      unawaited(platform.captureFeatureView(flag: 'variant-flag'));
+      await platform.reset();
+
+      final view = await server.waitForEvent(r'$feature_view');
+      expect(view['distinct_id'], distinctId);
+    });
+
+    test(r'sendFeatureFlagEvent false skips $feature_flag_called', () async {
+      final server = await LocalPostHogServer.start();
+      server.respond = (_) => PostHogResponse.json(_variantFlagResponse());
+      final flagsLoaded = Completer<void>();
+      final config = configFor(server)
+        ..onFeatureFlags = () {
+          if (!flagsLoaded.isCompleted) flagsLoaded.complete();
+        };
+      final platform = await setUpPlatform(config);
+      await flagsLoaded.future;
+
+      expect(
+          await platform.isFeatureEnabled('variant-flag',
+              sendFeatureFlagEvent: false),
+          isTrue);
+      expect(
+          await platform.getFeatureFlag(
+              key: 'variant-flag', sendFeatureFlagEvent: false),
+          'test-variant');
+      await platform.capture(eventName: 'sentinel event');
+      await server.waitForEvent('sentinel event');
+      expect(server.eventNames, isNot(contains(r'$feature_flag_called')));
+    });
+
+    test(
+        r'getFeatureFlag follows config.sendFeatureFlagEvent unless overridden',
+        () async {
+      final server = await LocalPostHogServer.start();
+      server.respond = (_) => PostHogResponse.json(_variantFlagResponse());
+      final flagsLoaded = Completer<void>();
+      final config = configFor(server)
+        ..sendFeatureFlagEvent = false
+        ..onFeatureFlags = () {
+          if (!flagsLoaded.isCompleted) flagsLoaded.complete();
+        };
+      final platform = await setUpPlatform(config);
+      await flagsLoaded.future;
+
+      expect(
+          await platform.getFeatureFlag(key: 'variant-flag'), 'test-variant');
+      await platform.capture(eventName: 'sentinel event');
+      await server.waitForEvent('sentinel event');
+      expect(server.eventNames, isNot(contains(r'$feature_flag_called')));
+
+      await platform.getFeatureFlag(
+          key: 'variant-flag', sendFeatureFlagEvent: true);
+      final called = await server.waitForEvent(r'$feature_flag_called');
+      expect(_propertiesOf(called)[r'$feature_flag'], 'variant-flag');
+    });
+
+    test(
+        r'getAllFeatureFlags returns every loaded flag without capturing $feature_flag_called',
+        () async {
+      final server = await LocalPostHogServer.start();
+      server.respond = (_) => PostHogResponse.json({
+            'flags': {
+              ..._variantFlagResponse()['flags']! as Map,
+              'off-flag': {'key': 'off-flag', 'enabled': false},
+            },
+          });
+      final platform = await setUpPlatform(
+        configFor(server)..preloadFeatureFlags = false,
+      );
+
+      expect(await platform.getAllFeatureFlags(), isNull);
+
+      await platform.reloadFeatureFlags();
+      final flags = await platform.getAllFeatureFlags();
+      expect(
+          flags,
+          unorderedEquals([
+            const PostHogFeatureFlagResult(
+                key: 'variant-flag', enabled: true, variant: 'test-variant'),
+            const PostHogFeatureFlagResult(key: 'off-flag', enabled: false),
+          ]));
+      expect(flags!.firstWhere((flag) => flag.key == 'variant-flag').payload,
+          {'color': 'blue'});
+
+      await platform.capture(eventName: 'sentinel event');
+      await server.waitForEvent('sentinel event');
+      expect(server.eventNames, isNot(contains(r'$feature_flag_called')));
     });
 
     test('onFeatureFlags reports the flags cached by the previous launch',
