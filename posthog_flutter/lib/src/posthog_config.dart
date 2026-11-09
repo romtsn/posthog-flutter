@@ -188,6 +188,27 @@ class PostHogConfig {
   /// ```
   List<String>? evaluationContexts;
 
+  /// Maximum number of retries for a `/flags` request after a network error
+  /// or a gateway error (HTTP 502 or 504).
+  ///
+  /// The SDK waits 300ms before the first retry and doubles the wait for each
+  /// later one. A refused connection is not retried.
+  ///
+  /// Defaults to `1`. Set to `0` to disable retries; negative values are
+  /// treated as `0`.
+  ///
+  /// **Flutter web:** not applied. posthog-js is initialized by your app, so
+  /// set `feature_flag_request_max_retries` in your `posthog.init({...})` call
+  /// instead.
+  ///
+  /// **Example:**
+  /// ```dart
+  /// final config = PostHogConfig('<YOUR_PROJECT_TOKEN>')
+  ///   ..featureFlagRequestMaxRetries = 3;
+  /// await Posthog().setup(config);
+  /// ```
+  var featureFlagRequestMaxRetries = 1;
+
   /// Whether the SDK captures application lifecycle events automatically.
   ///
   /// Captured events include app opened, backgrounded, installed, and updated
@@ -481,6 +502,7 @@ class PostHogConfig {
       'sendFeatureFlagEvents': sendFeatureFlagEvent,
       'preloadFeatureFlags': preloadFeatureFlags,
       if (evaluationContexts != null) 'evaluationContexts': evaluationContexts,
+      'featureFlagRequestMaxRetries': featureFlagRequestMaxRetries,
       'captureApplicationLifecycleEvents': captureApplicationLifecycleEvents,
       'rageClickConfig': rageClickConfig.toMap(),
       'debug': debug,
@@ -936,20 +958,24 @@ class PostHogSessionReplayConfig {
 
   /// Multiplier for the width and height of Android replay screenshots.
   ///
-  /// Flutter screenshots scale from their logical-resolution baseline; native
-  /// screens recorded with [captureNativeScreens] scale from physical resolution.
-  /// Defaults to `1.0`. Values are clamped to `0.1`–`1.0`; NaN and infinity use
-  /// `1.0`. Scaled dimensions round up to at least one pixel without changing the
-  /// logical replay viewport. Masks round outward to cover output pixels; frames
-  /// with mask bounds that cannot be mapped safely are skipped.
+  /// Defaults to `null`: Flutter screenshots capture at one pixel per logical
+  /// pixel and native screens recorded with [captureNativeScreens] use the
+  /// Android SDK default of one pixel per dp. An explicit value multiplies the
+  /// logical size of Flutter screenshots and the physical size of native
+  /// screens, so `1.0` captures native screens at physical resolution. Values
+  /// are clamped to `0.1`–`1.0`; NaN and infinity reset to `null`. Scaled
+  /// dimensions round up to at least one pixel without changing the logical
+  /// replay viewport. Masks round outward to cover output pixels; frames with
+  /// mask bounds that cannot be mapped safely are skipped.
   /// Set before `Posthog().setup(config)`.
   @experimental
-  double get screenshotScale => _screenshotScale;
-  double _screenshotScale = 1.0;
+  double? get screenshotScale => _screenshotScale;
+  double? _screenshotScale;
 
   @experimental
-  set screenshotScale(double value) {
-    _screenshotScale = value.isFinite ? value.clamp(0.1, 1.0) : 1.0;
+  set screenshotScale(double? value) {
+    _screenshotScale =
+        value != null && value.isFinite ? value.clamp(0.1, 1.0) : null;
   }
 
   /// Compression quality for Android replay screenshots.
@@ -1067,7 +1093,7 @@ class PostHogSessionReplayConfig {
       'maskAllPlatformViews': maskAllPlatformViews,
       'captureNativeScreens': captureNativeScreens,
       'verifyScreenshotMaskAlignment': verifyScreenshotMaskAlignment,
-      'screenshotScale': screenshotScale,
+      if (screenshotScale != null) 'screenshotScale': screenshotScale,
       'screenshotCompressionQuality': screenshotCompressionQuality,
       'screenshotColorMode': screenshotColorMode.name,
       if (sampleRate != null) 'sampleRate': sampleRate,
