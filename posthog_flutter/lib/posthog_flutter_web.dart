@@ -136,6 +136,12 @@ class PosthogFlutterWeb extends PosthogFlutterPlatformInterface {
         'Configure bootstrap in your posthog.init({...}) call instead.',
       );
     }
+    if (config.disableGeoIp) {
+      printIfDebug(
+        'Warning: PostHogConfig.disableGeoIp is not applied on Flutter web. '
+        r'Set $geoip_disable: true on events in your posthog.init({...}) before_send instead.',
+      );
+    }
 
     WebCanvasMaskProvider(config).register();
 
@@ -189,6 +195,12 @@ class PosthogFlutterWeb extends PosthogFlutterPlatformInterface {
     );
   }
 
+  Map<String, Object> _withWebContext(Map<String, Object>? properties) {
+    final stamped = <String, dynamic>{...?properties};
+    stampWebAutomaticProperties(stamped);
+    return stamped.cast<String, Object>();
+  }
+
   @override
   Future<void> capture({
     required String eventName,
@@ -199,7 +211,7 @@ class PosthogFlutterWeb extends PosthogFlutterPlatformInterface {
       _order.event(
         () => _runBeforeSend(
           eventName,
-          properties,
+          _withWebContext(properties),
           userProperties: userProperties,
           userPropertiesSetOnce: userPropertiesSetOnce,
         ),
@@ -239,6 +251,7 @@ class PosthogFlutterWeb extends PosthogFlutterPlatformInterface {
     return _call(
       MethodCall('capture', {
         'eventName': processedEvent.event,
+        'automaticPropertiesApplied': true,
         if (normalizedProperties != null) 'properties': normalizedProperties,
         if (normalizedUserProperties != null)
           'userProperties': normalizedUserProperties,
@@ -280,10 +293,10 @@ class PosthogFlutterWeb extends PosthogFlutterPlatformInterface {
   }) async {
     // The screen name argument wins over a properties `$screen_name`.
     // beforeSend still runs after this and can change the name.
-    final propsWithScreenName = <String, Object>{
+    final propsWithScreenName = _withWebContext({
       ...?properties,
       PostHogPropertyName.screenName: screenName,
-    };
+    });
 
     return _order.event(
       () => _runBeforeSend(PostHogEventName.screen, propsWithScreenName),
@@ -318,6 +331,7 @@ class PosthogFlutterWeb extends PosthogFlutterPlatformInterface {
     return _call(
       MethodCall('screen', {
         'screenName': finalScreenName,
+        'automaticPropertiesApplied': true,
         if (remaining != null && remaining.isNotEmpty) 'properties': remaining,
       }),
     );
@@ -595,10 +609,14 @@ class PosthogFlutterWeb extends PosthogFlutterPlatformInterface {
         inAppByDefault: _config?.errorTrackingConfig.inAppByDefault ?? true,
       );
 
+      final exceptionProperties = _withWebContext(
+        Map<String, Object>.from(exceptionData),
+      );
+
       return await _order.event(
         () => _runBeforeSend(
           PostHogEventName.exception,
-          exceptionData.cast<String, Object>(),
+          exceptionProperties,
         ),
         (processedEvent) => _sendException(error, processedEvent),
       );
@@ -631,7 +649,10 @@ class PosthogFlutterWeb extends PosthogFlutterPlatformInterface {
     );
 
     return _call(
-      MethodCall('captureException', {'properties': normalizedData}),
+      MethodCall('captureException', {
+        'automaticPropertiesApplied': true,
+        'properties': normalizedData,
+      }),
     );
   }
 

@@ -1,5 +1,29 @@
 ## Next
 
+## 5.61.0
+
+### Minor Changes
+
+- bef8702: Add the `disableGeoIp` config so an app can opt out of server-side GeoIP enrichment. When enabled, events carry `$geoip_disable: true` and feature flag requests send `geoip_disable: true`, so the server doesn't infer the user's location from their IP address. Android requires posthog-android 3.77.0 or later. Flutter web doesn't apply it; set `$geoip_disable` in your posthog-js `before_send` instead.
+
+## 5.60.3
+
+### Patch Changes
+
+- b7c9e50: Fix failed feature flag values and payloads on Windows and Linux, preserve successful cached values on errored refreshes, and report failed reads as evaluation failures.
+
+## 5.60.2
+
+### Patch Changes
+
+- 7796ebf: Let web `beforeSend` redact `$current_url`, `$host`, and `$pathname`. Those properties are attached before the callback. A removed key is sent as null, because posthog-js fills an omitted one back in from `window.location`.
+
+## 5.60.1
+
+### Patch Changes
+
+- 3239e4e: Keep Android surveys working when `setup()` runs more than once in a process, for example after a Flutter hot restart. The plugin now reuses the survey delegate that the native SDK holds, and points it at the engine that is attached, so a survey that appears captures `survey shown`, `survey sent` and `survey dismissed` again, keeps the answer, and counts as seen. A recurring survey no longer comes back on every launch. Release the delegate's channel when its engine detaches, and discard the delegate when the SDK closes. Preserve unfinished answers across engine detach/reattach and Flutter hot restart without recording a dismissal.
+
 ## 5.60.0
 
 ### Minor Changes
