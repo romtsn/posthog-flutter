@@ -115,6 +115,16 @@ jobs:
         if: needs.detect-markdown-only.outputs.markdown_only != 'true'
         run: make checkFormatKotlin
 
+      # Flutter 3.44+ scans the plugin's build.gradle text for `apply plugin:` / `plugins {}` lines
+      # and warns about, or force-applies, KGP on AGP 9 (#731). Keep those forms out of the file.
+      - name: Check build.gradle avoids Flutter's plugin-apply scan
+        if: needs.detect-markdown-only.outputs.markdown_only != 'true'
+        run: |
+          if grep -nE '^[[:space:]]*(apply[[:space:]]+plugin|plugins[[:space:]]*\{)' posthog_flutter/android/build.gradle; then
+            echo "::error file=posthog_flutter/android/build.gradle::Use pluginManager.apply(...) instead of 'apply plugin:' or a plugins {} block (see #731)."
+            exit 1
+          fi
+
   swift-format:
     needs: detect-markdown-only
     name: Swift format
@@ -358,7 +368,8 @@ jobs:
 
       - name: Boot iOS test simulator
         if: ${{ needs.detect-markdown-only.outputs.markdown_only != 'true' && matrix.target == 'ios' && matrix.package_manager == 'cocoapods' }}
-        timeout-minutes: 5
+        # A new simulator's first boot on the macos-26 image spends about 4 minutes in data migration.
+        timeout-minutes: 10
         run: |
           simulator_id=$(xcrun simctl create "PostHog Plugin Tests" "iPhone 17 Pro")
           echo "POSTHOG_TEST_SIMULATOR=$simulator_id" >> "$GITHUB_ENV"
